@@ -26,9 +26,9 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=lo
 
 async def post_init(app):
     await app.bot.set_my_commands([
-        ("start", "Open Dashboard"),
-        ("add_group", "Connect Group"),
-        ("broadcast", "Announcement"),
+        ("start", "Menu"),
+        ("add_group", "Connect"),
+        ("broadcast", "Msg All"),
         ("add_link", "Add Quiz"),
         ("status", "Reports")
     ])
@@ -36,20 +36,23 @@ async def post_init(app):
     db = load_data()
     t = db["settings"]["time"].split(":")
     
+    # Jobs
     app.job_queue.run_daily(job_send_test, time(hour=int(t[0]), minute=int(t[1]), tzinfo=pytz.timezone('Asia/Kolkata')))
     app.job_queue.run_daily(job_nightly_report, time(hour=21, minute=30, tzinfo=pytz.timezone('Asia/Kolkata')))
     
-    print("✅ Final Ultra Bot Running!")
+    print("✅ Ultra Pro Bot Started!")
 
 if __name__ == "__main__":
     keep_alive()
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
+    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("add_group", add_group))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
     
+    # Conversation
     conv = ConversationHandler(
         entry_points=[CommandHandler("add_link", start_add_link)],
         states={
@@ -60,7 +63,8 @@ if __name__ == "__main__":
     )
     app.add_handler(conv)
 
-    app.add_handler(CallbackQueryHandler(button_handler, pattern='^menu_|time_|add_link_|status_|help_|fire_'))
+    # Callbacks (Pattern Update for Back Home)
+    app.add_handler(CallbackQueryHandler(button_handler, pattern='^menu_|time_|add_link_|status_|help_|fire_|back_'))
     app.add_handler(CallbackQueryHandler(mark_attendance, pattern='attendance_done'))
 
     app.run_polling()
