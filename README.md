@@ -1,93 +1,65 @@
-# 🤖 RBSE Test Manager Pro Bot (Ultra Edition)
+# 🦅 RBSE Ultra Pro Test Manager Bot (v4.0)
 
-![Bot Status](https://img.shields.io/badge/Status-Active-brightgreen)
-![Python](https://img.shields.io/badge/Language-Python_3.10-blue)
-![Telegram](https://img.shields.io/badge/Platform-Telegram-blue)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge&logo=telegram)
+![Python](https://img.shields.io/badge/Language-Python_3.11-blue?style=for-the-badge&logo=python)
+![Platform](https://img.shields.io/badge/Deploy-Render-violet?style=for-the-badge&logo=render)
 
-**RBSE Test Manager** is an advanced, fully automated Telegram bot designed to manage daily quiz tests for student groups. It handles scheduling, broadcasting, attendance tracking, and disciplinary actions (auto-ban on missed tests).
+**The Ultimate Automation Solution for Coaching Groups.**
+Designed to manage daily quizzes, track attendance, maintain discipline, and generate nightly reports automatically.
 
 ---
 
-## 🚀 Ultra Pro Features
+## 🌟 Key Features (Ultra Pro)
 
-### 1. ⚡ Fully Automated Scheduler
-- Automatically sends test links at a fixed time (Default: **4:00 PM**).
-- No manual intervention required daily. Just load links once for the whole week!
+### 🤖 Automation & Management
+* **⚡ Auto-Scheduler:** Sends test links automatically at the set time (e.g., 4 PM, 8 PM).
+* **🚨 Pre-Alert System:** Sends a warning message **2 minutes before** the test and **Pins** it.
+* **📅 Interactive Queue:** Add test links for days in advance using a step-by-step conversation.
+* **📢 Broadcast:** Send announcements to all connected groups with one click.
 
-### 2. 📢 Smart Pre-Alert System
-- **2 Minutes Before Test:** Sends a "Get Ready" warning message.
-- **Auto-Pin:** Automatically pins the warning message to notify all members.
-- **Auto-Delete:** (Optional) Cleans up old announcements.
+### 🛡️ Discipline & Tracking
+* **📝 Attendance System:** Students must click the "Mark Attendance" button after the test.
+* **🦅 Early Bird Topper:** Identifies the first student to complete the test daily.
+* **🌙 Nightly Report (9:30 PM):**
+    * Generates a list of **Absent Students**.
+    * **Auto-Kick:** Automatically bans users who miss **3 tests** in a row.
+* **👮 Admin Control:** Owner can authorize other admins to manage the bot.
 
-### 3. 🛡️ Discipline Management
-- **Attendance Button:** Students must click "Mark Attendance" after the test.
-- **3-Strike Rule:** If a user misses 3 tests consecutively, the bot can **Auto-Kick/Ban** them.
-
-### 4. 🎛️ Dynamic Control Panel
-- **Visual Menu:** Interactive buttons for Owners.
-- **Time Changer:** Change test timing (4 PM, 7 PM, 8 PM) directly from Telegram buttons.
-- **Deep Linking:** Direct contact button for the Owner.
+### 💻 Technical Superiority
+* **🟢 Zero Downtime:** Integrated `Flask` server to keep the bot alive on Render Free Tier.
+* **📂 Modular Code:** Split into 6 files for maximum stability and speed.
+* **📊 Dashboard:** Real-time status report for the owner.
 
 ---
 
 ## 🛠️ Commands List
 
-### 👑 Owner/Admin Commands
-
-| Command | Description | Example Usage |
+| Command | Description | Access |
 | :--- | :--- | :--- |
-| `/start` | Opens the Pro Dashboard with Photo & Buttons. | `/start` |
-| `/add_group` | Connects a group to the bot (Run inside the group). | `/add_group` |
-| `/test_link` | Adds a new test link to the Queue. | `/test_link Day 1 Physics http://link...` |
-
-### 👤 User Commands
-
-| Command | Description |
-| :--- | :--- |
-| `Button Click` | Users interact via the "Mark Attendance" button. |
+| `/start` | Open the **Interactive Menu** (Dashboard) | Everyone |
+| `/add_group` | Connect a study group to the bot | Admin (in Group) |
+| `/add_link` | Add a new test link (Interactive Mode) | Admin (Private) |
+| `/broadcast` | Send a message to all groups | Owner Only |
+| `/status` | View Total Groups, Queue & Settings | Admin Only |
+| `/set_timer` | Change daily test time (e.g., `/set_timer 20:00`) | Owner Only |
 
 ---
 
-## ⚙️ Installation & Deployment (Render)
+## 🚀 Deployment Guide (Render.com)
+
+This bot is optimized for **Render Free Tier**.
 
 ### Step 1: Prepare Files
-Ensure you have these 4 files in your repository:
-1. `main.py` (The Brain)
-2. `database.py` (The Memory)
-3. `config.py` (The Settings)
-4. `requirements.txt` (The Libraries)
+Ensure your GitHub repository has these **6 Files**:
+1.  `main.py` (The Brain)
+2.  `config.py` (Settings)
+3.  `database.py` (Storage)
+4.  `handlers.py` (Commands)
+5.  `jobs.py` (Automation)
+6.  `requirements.txt` (Libraries)
 
-### Step 2: Deploy on Render
-1. Create a new **Web Service** or **Background Worker** on Render.
-2. Connect your GitHub Repository.
-3. **Build Command:** `pip install -r requirements.txt`
-4. **Start Command:** `python main.py`
-
-### Step 3: Configure Environment
-- Edit `config.py` and add your `BOT_TOKEN` and `OWNER_ID` before deploying.
-
----
-
-## 📸 How It Works (Workflow)
-
-1. **Setup:** Add the bot to your study group and make it **Admin**.
-2. **Connect:** Type `/add_group` in the group.
-3. **Load Links:** Go to the bot's private chat and add links for the next few days using `/test_link`.
-4. **Relax:** The bot will automatically:
-   - Wake up at 4:00 PM.
-   - Send a warning.
-   - Pin the message.
-   - Wait 2 minutes.
-   - Send the actual test link.
-   - Track attendance.
-
----
-
-## 👨‍💻 Developer & Credits
-
-- **Owner:** RoyalKing_7X4
-- **ID:** `6761345074`
-- **Developed for:** RBSE Board Students (Class 12th)
-
----
-*© 2025 RBSE Test Series. All Rights Reserved.*
+### Step 2: Configure `config.py`
+Edit `config.py` and add your details:
+```python
+BOT_TOKEN = "123456:ABC-DEF..."  # Get from @BotFather
+OWNER_ID = 123456789             # Your Telegram User ID
