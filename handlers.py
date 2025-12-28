@@ -2,7 +2,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from database import load_data, save_data, is_admin, update_time, get_queue_list
 from config import OWNER_ID, START_IMG
-from datetime import datetime
+from datetime import datetime, time  # <--- Ye add kiya hai
+import pytz                          # <--- Ye add kiya hai
 from jobs import job_send_test, execute_test_logic
 
 ASK_DAY, ASK_LINK = range(2)
@@ -11,9 +12,9 @@ ASK_DAY, ASK_LINK = range(2)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if is_admin(user.id):
-        caption = f"👑 **Owner Panel: {user.first_name}**"
+        caption = f"👑 **Owner Panel: {user.first_name}**\nSelect option:"
         keyboard = [
-            [InlineKeyboardButton("🚀 QUICK START TEST (Testing)", callback_data='menu_quick_start')],
+            [InlineKeyboardButton("🚀 QUICK START (Testing)", callback_data='menu_quick_start')],
             [InlineKeyboardButton("➕ Add Link", callback_data='add_link_flow'),
              InlineKeyboardButton("📢 Broadcast", callback_data='help_broadcast')],
             [InlineKeyboardButton("⏰ Set Timer", callback_data='menu_timer'),
@@ -33,7 +34,7 @@ async def add_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.id not in db["groups"]:
         db["groups"].append(chat.id)
         save_data(db)
-        await update.message.reply_text(f"✅ **Group Connected:** {chat.title}")
+        await update.message.reply_text(f"✅ **Connected:** {chat.title}")
         await context.bot.send_message(OWNER_ID, f"📢 New Group: {chat.title}")
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -45,7 +46,6 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
     db = load_data()
     sent = 0
-    # Send to Groups
     for gid in db["groups"]:
         try:
             await context.bot.send_message(gid, f"📢 **ANNOUNCEMENT:**\n\n{msg}")
@@ -59,69 +59,78 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = f"📊 **STATUS**\nGroups: {len(db['groups'])}\nQueue: {len(db['queue'])}\nTime: {db['settings']['time']}"
     await update.message.reply_text(txt)
 
-# --- BUTTON LOGIC ---
+# --- BUTTON LOGIC (Fixed) ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer() # Pop-up hatane ke liye
     data = query.data
     db = load_data()
 
-    # 1. QUICK START MENU
-    if data == 'menu_quick_start':
-        queue = get_queue_list()
-        if not queue:
-            await query.message.reply_text("⚠️ Queue Empty hai! Pehle `/add_link` karein.")
-            return
-        
-        # Show list of available tests
-        btns = []
-        for i, item in enumerate(queue):
-            # Button Text: "Day 1 (Physics)" -> Value: "fire_0" (index 0)
-            btns.append([InlineKeyboardButton(f"🚀 Fire: {item['day']}", callback_data=f"fire_{i}")])
-        
-        await query.message.reply_text("👇 **Select Test to Launch NOW:**", reply_markup=InlineKeyboardMarkup(btns))
-
-    # 2. FIRE TEST (Force Start Logic)
-    elif data.startswith('fire_'):
-        index = int(data.split('_')[1])
-        queue = get_queue_list()
-        
-        if index >= len(queue):
-            await query.message.reply_text("❌ Link not found (Maybe deleted).")
-            return
-            
-        test_to_run = queue[index] # Don't pop, just read for testing
-        
-        await query.message.reply_text(f"⏳ **Initiating {test_to_run['day']}...**\n(Check Group in 2 mins)")
-        
-        # Run for all groups
-        for gid in db["groups"]:
-            # Call the shared logic from jobs.py
-            context.application.create_task(execute_test_logic(context, gid, test_to_run))
-
-    # 3. OTHER MENUS
-    elif data == 'help_broadcast':
-        await query.message.reply_text("📢 **Broadcast:**\nLikhein: `/broadcast Apna Message`")
-
-    elif data == 'add_link_flow':
-        await query.message.reply_text("Likhein: `/add_link`")
-        
-    elif data == 'status_check':
-        await status(query, context)
-
-    elif data == 'menu_timer':
+    # 1. TIMER MENU SHOW
+    if data == 'menu_timer':
         btns = [
             [InlineKeyboardButton("🕓 4 PM", callback_data='time_16'),
+             InlineKeyboardButton("🕔 5 PM", callback_data='time_17')],
+            [InlineKeyboardButton("🕕 6 PM", callback_data='time_18'),
              InlineKeyboardButton("🕖 7 PM", callback_data='time_19')],
             [InlineKeyboardButton("🕗 8 PM", callback_data='time_20'),
-             InlineKeyboardButton("🕘 9 PM", callback_data='time_21')]
+             InlineKeyboardButton("🕘 9 PM", callback_data='time_21')],
+            [InlineKeyboardButton("🔙 Back", callback_data='back_home')]
         ]
         await query.message.edit_reply_markup(InlineKeyboardMarkup(btns))
 
+    # 2. TIMER SET LOGIC (FIXED)
     elif data.startswith('time_'):
         h = int(data.split('_')[1])
         update_time(f"{h}:00")
-        await query.message.edit_text(f"✅ Timer Updated: {h}:00 PM")
+        
+        # Job Reschedule Logic
+        q = context.application.job_queue
+        # Remove old jobs
+        for job in q.jobs():
+            if job.callback.__name__ == 'job_send_test':
+                job.schedule_removal()
+        
+        # Add new job
+        q.run_daily(job_send_test, time(hour=h, minute=0, tzinfo=pytz.timezone('Asia/Kolkata')))
+        
+        await query.message.edit_caption(caption=f"✅ **Success!**\nTime Updated to: **{h}:00 PM**")
+
+    # 3. BACK HOME
+    elif data == 'back_home':
+        # Re-show start menu
+        await start(query, context)
+
+    # 4. QUICK START MENU
+    elif data == 'menu_quick_start':
+        queue = get_queue_list()
+        if not queue:
+            await query.message.reply_text("⚠️ Queue Empty! `/add_link` karein.")
+            return
+        btns = []
+        for i, item in enumerate(queue):
+            btns.append([InlineKeyboardButton(f"🚀 Fire: {item['day']}", callback_data=f"fire_{i}")])
+        await query.message.reply_text("👇 **Select Test to Launch:**", reply_markup=InlineKeyboardMarkup(btns))
+
+    # 5. FIRE TEST
+    elif data.startswith('fire_'):
+        index = int(data.split('_')[1])
+        queue = get_queue_list()
+        if index >= len(queue):
+            await query.message.reply_text("❌ Error: Link not found.")
+            return
+        test_to_run = queue[index]
+        await query.message.reply_text(f"⏳ **Starting {test_to_run['day']}...**")
+        for gid in db["groups"]:
+            context.application.create_task(execute_test_logic(context, gid, test_to_run))
+
+    # 6. OTHERS
+    elif data == 'help_broadcast':
+        await query.message.reply_text("📢 Msg: `/broadcast Hello`")
+    elif data == 'add_link_flow':
+        await query.message.reply_text("Msg: `/add_link`")
+    elif data == 'status_check':
+        await status(query, context)
 
 # --- ATTENDANCE ---
 async def mark_attendance(update: Update, context: ContextTypes.DEFAULT_TYPE):
