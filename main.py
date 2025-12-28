@@ -4,7 +4,6 @@ from datetime import time
 import pytz
 from threading import Thread
 from flask import Flask
-from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 
 # Imports
@@ -19,44 +18,38 @@ from jobs import job_send_test, job_nightly_report
 # --- FLASK ---
 app_web = Flask('')
 @app_web.route('/')
-def home(): return "Pro Bot Live 🟢"
+def home(): return "Final Bot Live 🟢"
 def run_http(): app_web.run(host='0.0.0.0', port=8080)
 def keep_alive(): t = Thread(target=run_http); t.start()
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 async def post_init(app):
-    # 1. Set Menu Button
-    commands = [
-        ("start", "Open Menu"),
+    await app.bot.set_my_commands([
+        ("start", "Open Dashboard"),
         ("add_group", "Connect Group"),
-        ("add_link", "Add Test"),
-        ("status", "Check Report"),
-        ("broadcast", "Send Announcement")
-    ]
-    await app.bot.set_my_commands(commands)
+        ("broadcast", "Announcement"),
+        ("add_link", "Add Quiz"),
+        ("status", "Reports")
+    ])
     
-    # 2. Schedule Jobs
     db = load_data()
     t = db["settings"]["time"].split(":")
     
     app.job_queue.run_daily(job_send_test, time(hour=int(t[0]), minute=int(t[1]), tzinfo=pytz.timezone('Asia/Kolkata')))
     app.job_queue.run_daily(job_nightly_report, time(hour=21, minute=30, tzinfo=pytz.timezone('Asia/Kolkata')))
     
-    print("✅ Ultra Pro Bot Started!")
+    print("✅ Final Ultra Bot Running!")
 
 if __name__ == "__main__":
     keep_alive()
-    
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
-    # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("add_group", add_group))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
     
-    # Add Link Conversation
     conv = ConversationHandler(
         entry_points=[CommandHandler("add_link", start_add_link)],
         states={
@@ -67,8 +60,7 @@ if __name__ == "__main__":
     )
     app.add_handler(conv)
 
-    # Callbacks
-    app.add_handler(CallbackQueryHandler(button_handler, pattern='^menu_|time_|add_link_|status_'))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern='^menu_|time_|add_link_|status_|help_|fire_'))
     app.add_handler(CallbackQueryHandler(mark_attendance, pattern='attendance_done'))
 
     app.run_polling()
