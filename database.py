@@ -36,3 +36,8 @@ def update_time(new_time):
     if "settings" not in data: data["settings"] = {}
     data["settings"]["time"] = new_time
     save_data(data)
+
+def get_queue_list():
+    """Testing ke liye list return karega"""
+    data = load_data()
+    return data["queue"]
