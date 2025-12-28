@@ -1,10 +1,30 @@
 import logging
 import asyncio
+import os
+from threading import Thread
+from flask import Flask # Yeh line zaruri hai
 from datetime import time
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import BadRequest
+
+# --- FLASK KEEP ALIVE SYSTEM (FIXED FOR RENDER) ---
+app_web = Flask('')
+
+@app_web.route('/')
+def home():
+    return "Bot is Running! 🚀"
+
+def run_http():
+    # Render ka diya hua PORT use karega, warna 10000
+    port = int(os.environ.get("PORT", 10000))
+    # '0.0.0.0' ka matlab hai ki bahar se connection accept kare
+    app_web.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_http)
+    t.start()
 
 # --- IMPORT CONFIG & DATABASE ---
 from config import BOT_TOKEN, OWNER_ID, OWNER_USERNAME, START_IMG
@@ -14,7 +34,7 @@ from database import load_data, save_data, update_time
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- COMMAND HANDLERS ---
+# --- COMMAND HANDLERS (SAME AS BEFORE) ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -55,8 +75,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith('set_time_'):
         hour = int(data.split('_')[2])
         update_time(f"{hour}:00")
-        
-        # Reschedule Immediately
         await schedule_daily_job(context.application, hour, 0)
         await query.message.edit_caption(caption=f"✅ **Time Updated:** Daily test ab **{hour}:00 PM** baje hoga.")
 
@@ -83,8 +101,6 @@ async def add_test_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     await update.message.reply_text(f"✅ **Saved!** Pending: {len(db['queue'])}")
 
-# --- JOB LOGIC ---
-
 async def send_daily_test(context: ContextTypes.DEFAULT_TYPE):
     db = load_data()
     if not db["queue"]:
@@ -95,7 +111,6 @@ async def send_daily_test(context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     groups = db["groups"]
 
-    # 1. Pre-Alert & Pin
     alert = "🚨 **ALERT:** Test starts in 2 Minutes! Get Ready."
     for gid in groups:
         try:
@@ -103,10 +118,8 @@ async def send_daily_test(context: ContextTypes.DEFAULT_TYPE):
             await context.bot.pin_chat_message(chat_id=gid, message_id=m.message_id)
         except: pass
 
-    # 2. Wait
     await asyncio.sleep(120)
 
-    # 3. Send Test
     btn = [[InlineKeyboardButton("✅ Mark Attendance", callback_data='attendance_done')]]
     msg = f"🚀 **TEST LIVE** 🚀\n\n📌 {todays_test}\n\n⚠️ **Click button below or Ban!**"
     
@@ -130,17 +143,12 @@ async def mark_attendance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data(db)
         await update.callback_query.answer("Present ✅", show_alert=True)
 
-# --- SCHEDULER HELPER ---
 async def schedule_daily_job(app, hour, minute):
     queue = app.job_queue
-    # Remove old jobs
     for job in queue.jobs(): job.schedule_removal()
-    # Add new job
     queue.run_daily(send_daily_test, time(hour=hour, minute=minute, tzinfo=pytz.timezone('Asia/Kolkata')))
 
-# --- STARTUP LOGIC (NO ERROR GUARANTEE) ---
 async def post_init(application: Application):
-    """Bot start hote hi database se time check karke job set karega"""
     db = load_data()
     t = db["schedule_time"].split(":")
     await schedule_daily_job(application, int(t[0]), int(t[1]))
@@ -148,6 +156,10 @@ async def post_init(application: Application):
 
 # --- MAIN ---
 if __name__ == "__main__":
+    # 1. Start Fake Server First
+    keep_alive()
+
+    # 2. Start Bot
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     app.add_handler(CommandHandler("start", start))
