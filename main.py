@@ -1,5 +1,4 @@
 import logging
-import json
 import asyncio
 from datetime import time
 import pytz
@@ -7,144 +6,119 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import BadRequest
 
-# --- CONFIGURATION ---
-TOKEN = "YOUR_BOT_TOKEN_HERE"   # BotFather wala Token
-OWNER_ID = 6761345074           # Aapki ID
-OWNER_USERNAME = "RoyalKing_7X4" # Bina @ ke likhna
-# Start Image URL (Koi bhi photo ka link ya File ID)
-START_IMG = "https://cdn-icons-png.flaticon.com/512/3408/3408591.png" 
+# Doosri files se import kar rahe hain
+from config import BOT_TOKEN, OWNER_ID, OWNER_USERNAME, START_IMG
+from database import load_data, save_data, update_time
 
-# Data File
-DATA_FILE = "bot_data.json"
-
-# Logging
+# Logging Setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- DATABASE ---
-def load_data():
-    try:
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return {"groups": [], "queue": [], "time": "16:00", "users": {}}
+# Global variable to store current job
+current_job = None
 
-def save_data(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
-
-# --- COMMANDS ---
+# --- START MENU & COMMANDS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # Buttons Design
+    # Pro Buttons
     keyboard = [
-        [InlineKeyboardButton("➕ Add Group (Help)", callback_data='help_group'),
-         InlineKeyboardButton("🔗 Add Link (Help)", callback_data='help_link')],
-        [InlineKeyboardButton("⏰ Set Timer", callback_data='set_timer_menu'),
-         InlineKeyboardButton("👑 Owner Contact", url=f"https://t.me/{OWNER_USERNAME}")],
-        [InlineKeyboardButton("ℹ️ Bot Features", callback_data='bot_features')]
+        [InlineKeyboardButton("➕ Add Group (Example)", callback_data='help_group'),
+         InlineKeyboardButton("🔗 Add Link (Example)", callback_data='help_link')],
+        [InlineKeyboardButton("⏰ Change Test Time", callback_data='menu_timer')],
+        [InlineKeyboardButton("👨‍💻 Contact Owner", url=f"https://t.me/{OWNER_USERNAME}")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Photo ke saath Welcome Message
     caption = (
-        f"👋 **Namaste {user.first_name}!**\n\n"
-        "Main **RBSE Test Manager Pro Bot** hu.\n"
-        "Mera kaam hai Daily Tests ko manage karna aur students ko discipline me rakhna.\n\n"
-        "👇 **Neeche diye gaye buttons se control karein:**"
+        f"👋 **Hello {user.first_name}!**\n\n"
+        "🤖 **I am RBSE Test Manager (Ultra Pro).**\n"
+        "Main daily tests, attendance aur discipline manage karta hu.\n\n"
+        "👇 **Control Panel:**"
     )
     
+    # Photo ke sath message
     await update.message.reply_photo(photo=START_IMG, caption=caption, reply_markup=reply_markup)
 
-# --- CALLBACK HANDLERS (Buttons Logic) ---
+# --- BUTTON CLICK HANDLING ---
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
+    # 1. HELP: GROUP ADD
     if data == 'help_group':
-        await query.message.reply_text(
-            "📢 **Group Kaise Add Karein?**\n\n"
-            "1. Sabse pehle Bot ko apne Group me Add karein.\n"
-            "2. Bot ko **Admin** banayein (Zaruri hai).\n"
-            "3. Phir Group me likhein: `/add_group`\n\n"
-            "Bas itna hi! Bot connect ho jayega."
+        txt = (
+            "🛡️ **Group Kaise Add Karein?**\n\n"
+            "1️⃣ Bot ko Group me **Admin** banayein.\n"
+            "2️⃣ Group me likhein: `/add_group`\n\n"
+            "✅ *Bot Success message bhejega.*"
         )
+        await query.message.reply_text(txt, parse_mode="Markdown")
 
+    # 2. HELP: LINK ADD
     elif data == 'help_link':
-        await query.message.reply_text(
+        txt = (
             "🔗 **Test Link Kaise Dalein?**\n\n"
-            "Bot ko Private me command bhejein:\n"
-            "`/test_link <Topic Name> <Link>`\n\n"
-            "✅ **Example:**\n"
-            "`/test_link Day 1 Physics http://t.me/quizbot?start=123`\n\n"
-            "Ek baar me 10-15 din ke link daal sakte hain!"
+            "Mujhe (Bot ko) Private me ye command bhejein:\n"
+            "`/test_link <Day/Topic> <Link>`\n\n"
+            "📝 **Example:**\n"
+            "`/test_link Day 1 Hindi http://t.me/quizbot?start=123`"
         )
+        await query.message.reply_text(txt, parse_mode="Markdown")
 
-    elif data == 'bot_features':
-        await query.message.reply_text(
-            "🤖 **Bot Features:**\n"
-            "✅ Daily Auto Test Sending\n"
-            "✅ Auto 'Pre-Alert' (2 min pehle)\n"
-            "✅ Auto Pin Message\n"
-            "✅ 3 Miss = Auto Ban System\n"
-            "✅ Queue System (Advance Links)"
-        )
-
-    elif data == 'set_timer_menu':
-        # Sirf Owner time change kar sakta hai
-        if update.effective_user.id != OWNER_ID:
+    # 3. MENU: TIMER SELECTION
+    elif data == 'menu_timer':
+        if query.from_user.id != OWNER_ID:
             await query.message.reply_text("❌ Sirf Owner time change kar sakta hai.")
             return
-            
-        # Time Options
+
         keyboard = [
-            [InlineKeyboardButton("🕓 4:00 PM", callback_data='time_16'),
-             InlineKeyboardButton("🕖 7:00 PM", callback_data='time_19')],
-            [InlineKeyboardButton("🕗 8:00 PM", callback_data='time_20'),
-             InlineKeyboardButton("🕘 9:00 PM", callback_data='time_21')]
+            [InlineKeyboardButton("🕓 4:00 PM", callback_data='set_time_16'),
+             InlineKeyboardButton("🕖 7:00 PM", callback_data='set_time_19')],
+            [InlineKeyboardButton("🕗 8:00 PM", callback_data='set_time_20'),
+             InlineKeyboardButton("🕘 9:00 PM", callback_data='set_time_21')],
+            [InlineKeyboardButton("🔙 Back", callback_data='back_home')]
         ]
         await query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif data.startswith('time_'):
-        # Time set logic
-        hour = int(data.split('_')[1])
-        db = load_data()
-        db["time"] = f"{hour}:00"
-        save_data(db)
+    # 4. LOGIC: SET TIME
+    elif data.startswith('set_time_'):
+        hour = int(data.split('_')[2])
+        update_time(f"{hour}:00") # DB update
         
-        await query.message.reply_text(f"✅ **Success!**\nDaily Test ka time ab **{hour}:00** baje set ho gaya hai.")
+        # Reschedule Job
+        await schedule_daily_job(context.application, hour, 0)
         
-        # Schedule update karna (Requires Restart usually, but we assume dynamic check)
-        # Note: Render par bot restart karna behtar hai time change ke baad.
+        await query.message.edit_caption(caption=f"✅ **Success!**\nTime update ho gaya hai: **{hour}:00 PM**")
 
-# --- MAIN COMMANDS ---
+# --- ADMIN COMMANDS ---
 
 async def add_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_type = update.effective_chat.type
-    if chat_type == "private":
+    chat = update.effective_chat
+    if chat.type == "private":
         await update.message.reply_text("❌ Ye command Group me likhein.")
         return
 
-    chat_id = update.effective_chat.id
     db = load_data()
-    
-    if chat_id not in db["groups"]:
-        db["groups"].append(chat_id)
+    if chat.id not in db["groups"]:
+        db["groups"].append(chat.id)
         save_data(db)
+        # Demo Message
         await update.message.reply_text("✅ **Group Connected!**\nAb yahan daily test aayega.")
+        # Owner ko info
+        await context.bot.send_message(chat_id=OWNER_ID, text=f"📢 New Group Added: {chat.title}")
     else:
-        await update.message.reply_text("ℹ️ Ye Group pehle se connected hai.")
+        await update.message.reply_text("ℹ️ Group pehle se connected hai.")
 
-async def test_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_test_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         return
 
     if not context.args:
-        await update.message.reply_text("❌ **Ghalat Tareeka!**\nExample dekhein: `/test_link Day 1 Hindi http://link.com`")
+        await update.message.reply_text("❌ **Error!**\nSahi Tareeka:\n`/test_link Day 1 Topic http://link.com`")
         return
 
     full_text = " ".join(context.args)
@@ -152,57 +126,57 @@ async def test_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db["queue"].append(full_text)
     save_data(db)
     
-    await update.message.reply_text(f"✅ **Link Added!**\nTotal Pending Tests: {len(db['queue'])}")
+    await update.message.reply_text(f"✅ **Link Saved!**\nQueue: {len(db['queue'])} Tests pending.")
 
-# --- SCHEDULER LOGIC (The Pro Part) ---
+# --- THE CORE: DAILY TEST SENDER ---
 
-async def daily_routine(context: ContextTypes.DEFAULT_TYPE):
+async def send_daily_test(context: ContextTypes.DEFAULT_TYPE):
     db = load_data()
-    current_set_time = db["time"] # e.g. "16:00"
-    
-    # Check karein kya abhi wahi time ho raha hai jo DB me hai?
-    # (Render par thoda time difference ho sakta hai, isliye hum har ghante check karte hain ya 
-    # fixed job chalate hain. Simplification ke liye hum maan ke chalte hain ye function sahi time par trigger hoga)
-    
     groups = db["groups"]
+    
+    # Agar Queue khali hai
+    if not db["queue"]:
+        await context.bot.send_message(chat_id=OWNER_ID, text="⚠️ **Alert:** Test Links khatam ho gaye!")
+        return
 
-    if db["queue"]:
-        todays_test = db["queue"].pop(0)
-        save_data(db)
+    # Link Nikalo
+    todays_test = db["queue"].pop(0)
+    save_data(db)
 
-        # STEP 1: PRE-ALERT (2 Minute Pehle)
-        alert_msg = "🚨 **ATTENTION STUDENTS** 🚨\n\nTest shuru hone me **2 Minute** bache hain!\nSab log taiyar ho jao.\n\nAttendance lagana mat bhoolna!"
-        
-        for group_id in groups:
+    # STEP 1: PRE-ALERT (2 Min Pehle)
+    alert_text = "🚨 **ALERT: TEST STARTING SOON** 🚨\n\nSirf 2 Minute bache hain!\nSab log ready ho jao."
+    
+    for group_id in groups:
+        try:
+            msg = await context.bot.send_message(chat_id=group_id, text=alert_text)
             try:
-                msg = await context.bot.send_message(chat_id=group_id, text=alert_msg)
                 await context.bot.pin_chat_message(chat_id=group_id, message_id=msg.message_id)
-            except Exception as e:
-                print(f"Error in alert: {e}")
+            except:
+                pass # Agar Pin ki permission nahi hai to ignore kare
+        except Exception as e:
+            print(f"Failed group {group_id}: {e}")
 
-        # STEP 2: WAIT 2 MINUTES
-        await asyncio.sleep(120) # 120 seconds wait
+    # STEP 2: WAIT (2 Minutes)
+    await asyncio.sleep(120)
 
-        # STEP 3: SEND TEST
-        quiz_msg = (
-            "🚀 **TEST STARTED NOW** 🚀\n\n"
-            f"📌 {todays_test}\n\n"
-            "🛑 **Warning:** Test dekar neeche button dabayein.\n"
-            "3 Miss = Permanent Ban!"
-        )
-        keyboard = [[InlineKeyboardButton("✅ HAAN! MAINE TEST DIYA", callback_data='attendance_done')]]
-        
-        for group_id in groups:
-            try:
-                await context.bot.send_message(chat_id=group_id, text=quiz_msg, reply_markup=InlineKeyboardMarkup(keyboard))
-            except Exception as e:
-                print(f"Error in sending quiz: {e}")
-        
-        await context.bot.send_message(chat_id=OWNER_ID, text=f"✅ Test Sent: {todays_test}")
+    # STEP 3: SEND MAIN TEST
+    keyboard = [[InlineKeyboardButton("✅ ATTENDANCE (Click Here)", callback_data='attendance_done')]]
+    markup = InlineKeyboardMarkup(keyboard)
+    
+    test_msg = (
+        "🚀 **RBSE TEST LIVE NOW** 🚀\n\n"
+        f"📌 {todays_test}\n\n"
+        "🛑 **Instruction:** Link open karke test dein aur wapis aakar button dabayein.\n"
+        "⚠️ **3 Miss = Group Ban**"
+    )
 
-    else:
-        # Link nahi hai
-        await context.bot.send_message(chat_id=OWNER_ID, text="⚠️ **ALERT:** Test Links khatam ho gaye hain!")
+    for group_id in groups:
+        try:
+            await context.bot.send_message(chat_id=group_id, text=test_msg, reply_markup=markup)
+        except Exception as e:
+            print(f"Failed group {group_id}: {e}")
+            
+    await context.bot.send_message(chat_id=OWNER_ID, text=f"✅ Test Sent: {todays_test}")
 
 # --- ATTENDANCE ---
 async def mark_attendance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -215,38 +189,48 @@ async def mark_attendance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db["users"][user_id] = {"last_date": ""}
 
     if db["users"][user_id]["last_date"] == today:
-        await query.answer("Attendance lag chuki hai! ✅", show_alert=True)
+        await query.answer("Attendance Already Marked! ✅", show_alert=True)
     else:
         db["users"][user_id]["last_date"] = today
         save_data(db)
-        await query.answer("Marked! ✅", show_alert=True)
+        await query.answer("✅ Present Marked!", show_alert=True)
 
-# --- MAIN RUNNER ---
+# --- DYNAMIC SCHEDULER ---
+async def schedule_daily_job(application, hour, minute):
+    job_queue = application.job_queue
+    # Purani job hatao
+    jobs = job_queue.jobs()
+    for job in jobs:
+        job.schedule_removal()
+    
+    # Nayi Job Lagao
+    india_tz = pytz.timezone('Asia/Kolkata')
+    job_queue.run_daily(send_daily_test, time(hour=hour, minute=minute, tzinfo=india_tz))
+    print(f"⏰ Timer Set for: {hour}:{minute}")
+
+# --- MAIN ---
 def main():
-    application = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
 
     # Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("add_group", add_group))
-    application.add_handler(CommandHandler("test_link", test_link))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(CallbackQueryHandler(mark_attendance, pattern='attendance_done'))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("add_group", add_group))
+    app.add_handler(CommandHandler("test_link", add_test_link))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern='^help_|menu_|set_time_|back_'))
+    app.add_handler(CallbackQueryHandler(mark_attendance, pattern='attendance_done'))
 
-    # Scheduler Setup
-    job_queue = application.job_queue
-    india_tz = pytz.timezone('Asia/Kolkata')
+    # Start hote hi Database se time padhkar Job set karega
+    db = load_data()
+    saved_time = db["schedule_time"].split(":") # e.g. ["16", "00"]
+    hour = int(saved_time[0])
+    minute = int(saved_time[1])
     
-    # NOTE: Default time hum 4 PM rakh rahe hain.
-    # Agar aap time change karte hain, to bot restart hone par naya time lega.
-    # Advanced dynamic jobs ke liye database se time padhkar job set karni padti hai.
-    # Abhi ke liye hum 4 PM fix job chala rahe hain (jaisa aapne manga tha)
-    # Aap manually code me time change karke re-deploy kar sakte hain best stability ke liye.
-    
-    job_queue.run_daily(daily_routine, time(hour=16, minute=0, tzinfo=india_tz)) 
-    # (Aap chaho to yahan time change kar sakte ho ya multiple times add kar sakte ho)
+    # Job Queue Init (Hack to access loop)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(schedule_daily_job(app, hour, minute))
 
-    print("🔥 Pro Bot Started...")
-    application.run_polling()
+    print("🚀 Ultra Pro Bot Started...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
